@@ -13,12 +13,12 @@ Application de suivi du temps pour une agence. Permet aux employés de saisir le
 | Couche | Technologie |
 |---|---|
 | Frontend | SvelteKit (SSR + client) |
-| Styles | Tailwind CSS |
+| Styles | Tailwind CSS + shadcn-svelte |
 | Base de données | SQLite — Turso (prod) / fichier local (dev) |
 | ORM | Drizzle ORM |
 | Auth | Lucia Auth (session-based, email/password) |
 | Emails | Resend (transactionnel) |
-| Scheduler | node-cron embarqué dans le serveur SvelteKit |
+| Scheduler | API Webhooks sécurisés (déclenchés par ordonnanceur externe) |
 | Charts | Chart.js ou Recharts (via svelte-chartjs) |
 | Déploiement | Fly.io ou Railway (Node adapter) |
 
@@ -61,6 +61,7 @@ id      TEXT PK
 user_id TEXT FK → users.id
 date    TEXT NOT NULL
 type    TEXT NOT NULL  -- OFF | VACANCES | MALADIE | RTT | NO_EMAIL_SOIR | NO_EMAIL_MATIN | UNLOCK
+period  TEXT NOT NULL DEFAULT 'FULL' -- AM | PM | FULL (Gestion des demi-journées)
 note    TEXT
 ```
 
@@ -85,9 +86,9 @@ expires_at TEXT
 
 - **Granularité** : saisie heure par heure. Un créneau = 1 ligne en base avec `start_hour` + `duration_min`.
 - **Chevauchement** : deux créneaux ne peuvent pas se chevaucher sur la même journée pour le même utilisateur. Valider côté serveur.
-- **Saisie rétroactive** : autorisée jusqu'à J+2 par défaut. Le manager peut poser une exception `UNLOCK` sur un utilisateur/date pour lever cette limite.
+- **Saisie rétroactive** : autorisée jusqu'à J+3 par défaut (incluant les week-ends). Le manager peut poser une exception `UNLOCK` sur un utilisateur/date pour lever cette limite.
 - **Note de plaisir** : obligatoire à la soumission (pas pour les brouillons).
-- **Statuts journée** : `OFF` bloquent la saisie de créneaux sur la journée concernée.
+- **Statuts journée** : `OFF` avec `period="FULL"` bloque la saisie. Si `period="AM"/"PM"`, le quota attendu passe de 8h à 4h.
 - **Roles** :
   - Niveau 1 (employé) : saisie uniquement sur son propre compte.
   - Niveau 2 (manager) : lecture de toute son équipe, peut poser des exceptions, reçoit les rapports.
@@ -95,7 +96,7 @@ expires_at TEXT
 
 ---
 
-## Automatisations à implémenter (node-cron)
+## Automatisations à implémenter (Webhooks via /api/cron/*)
 
 | Horaire | Action |
 |---|---|
@@ -112,11 +113,11 @@ Chaque cron doit logger son exécution et les erreurs d'envoi email sans crasher
 ## Fonctionnalités UI à implémenter
 
 ### Formulaire de saisie (`/saisie`)
-- [ ] Sélecteur de date (avec restriction J+2 sauf UNLOCK)
+- [ ] Sélecteur de date (avec restriction J+3 sauf UNLOCK)
 - [ ] Détection automatique si la journée a un statut spécial (OFF, VACANCES…)
 - [ ] Ajout de créneaux horaires (heure de début, durée)
-- [ ] Palettes en cascade : Client → Projet → Sous-projet → Tâche (dropdowns)
-- [ ] Bouton "+ Ajouter une tâche/un sujet" si absent de la liste → crée un paramètre en base
+- [ ] Palettes en cascade : Client → Projet → Sous-projet → Tâche (Combobox shadcn)
+- [ ] Bouton "+ Ajouter" (ouvre une modale pop-up) si absent de la liste → crée un paramètre en base
 - [ ] Note de plaisir (1-5 étoiles) par créneau
 - [ ] Bouton "Sauvegarder brouillon" (status=DRAFT) et "Soumettre"
 - [ ] Chargement du brouillon existant à l'ouverture
